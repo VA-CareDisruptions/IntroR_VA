@@ -1,0 +1,378 @@
+---
+title: "Intro to R"
+date: '2022-11-22'
+output:
+  rmdformats::readthedown:
+    code_folding: hide
+    css: stylesreadthedown.css
+    lightbox: no
+    self_contained: yes
+    thumbnails: no
+    toc_depth: '3'
+---
+
+## Organization
+
+1.  Create an R Project (File/New Project). The home directory is the one where the .Rproj file is saved
+2.  Create a folder called Data where you store your Data, create a folder called 'R' where you store R scripts
+3.  Create an Rmarkdown (.Rmd) file to organize and annotate your analyses: File/New File/R Markdown. Save this in your home directory. Note you can view your Rmd file formatted in 'visual' style, similar to a MS Word document, or in Source format. The is toggled with a button in upper left corner
+4.  Determine which packages you will need and laod them in the first chunk of the Rmarkdown using library(). Commonly used packages include **dplyr** (for data management), **ggplot2** (for plotting), and **lubridate** (for handling date formatting)
+
+## Chunks in R Markdown
+
+RMarkdown files can be used to organize your code and to generate reproducible reports.
+
+The code is organized in 'chunks'
+
+## Run Some code
+If you want to run the code in a chunk, you can run the whole chunk by clicking the little green triangle at the top of the chunk; or to run a single line,  put your cursor on the line and press CTRL+ENTER
+
+```{r}
+a1 <- 1+1
+a1
+```
+## Getting help
+
+If you aren't sure how a function works, you can find help documents in the panel at the right, or type ?function_name
+
+```{r}
+?readRDS
+```
+
+## Knitting
+
+A nice feature of Rmarkdown files is they can generate reports in a variety of formats including html, pdf, .docx. Just click the 'knit' button at the top of the Rmd file to see the options.
+
+## Load your packages
+
+In this first chunk, we tell R what packages we want to use using calls to library(). If they are not already installed on your computer, you will be prompted to install them. You only need to install a package once; then call it each time you open r using a library() call
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(table1)
+library(reshape2)
+library(tidyr)
+```
+
+## Read in data
+
+We can use 'relative paths' when you are working in an Rproject. The home directory (denoted with a .) is where the .rproj file is. Here we refer to a file in the Data subdirectory. rds is an r data format
+
+```{r}
+d1 <- readRDS('./Data/mortality_1percent.rds')
+```
+
+You could save this as a .csv file if you need to export for other purposes
+
+```{r}
+write.csv(d1, './Data/mortality_1percent.csv')
+```
+
+You can even read in files directly from the web. For example, this reads in the csv file from Github. csv files are useful when moving data between programs (e.g., SAS to R)
+
+```{r, eval=F}
+test1 <- read.csv('https://github.com/VA-CareDisruptions/IntroR_VA/blob/main/Data/mortality_1percent.csv?raw=true')
+```
+
+
+## Viewing your data
+
+You can always view a spreadsheet with your data using 'View()'
+
+```{r}
+View(d1)
+```
+
+Or if you just want a preview, use 'head'
+
+```{r}
+head(d1)
+```
+
+You can also extract info about number of rows and columns
+
+```{r}
+nrow(d1)
+ncol(d1)
+```
+
+## Exploring your data
+
+First, check the format of the variables in your data frame. 'chr' is a character variable, 'num' or' int' or 'dbl' are numeric variables; factor is a categorical variable.
+
+```{r}
+str(d1)
+
+
+```
+
+Let's format a date variable using the month and year as inputs
+
+Here we are going to use **pipes** to work with the data. a Pipe is denoted with a %\>%. It is saying that we want to create a new data frame called 'd2'. We are starting with data frame d1 and then adding onto it (mutating). We could also just overwrite d1 with the updated dataframe by writing d1 \<- d1 %\>%...
+
+Creating dates is complicated. We first paste together the year and month columns from the data frame and append an '01', separating each with a '-'. paste(year, month, '01', sep='-') This then has the format YYYY-MM-DD. But this is a character variable..we have to declare the variable as a Date and tell R what the format is as.Date(x, '%Y-%m-%d')) %Y is 4 digit year (%y would be 2 digit year), %m is 2 digit month (%b would be 3 character month abbreviation), and %d for 2 digit day. This could all be done in a single step, but we will break it in 2 here
+
+```{r}
+d2 <- d1 %>%
+  mutate( monthdate =paste(year, month, '01', sep='-'), monthdate = as.Date(monthdate) )
+```
+
+We can see here that the variable was created correctly
+
+```{r}
+str(d2)
+```
+
+We can get some summary stats easily using the Table1 package
+
+```{r}
+table1(~agey + race_recode + sex, data=d2)
+```
+
+We can spot a few issues here. first, age has a large range. That is because missing values are stored as 999. We should replace this with NA. age race_recode and sex should be stored as factor variables because they represent categories
+
+```{r}
+d2 <- d1 %>%
+  mutate(monthdate = as.Date(paste(year, month, '01', sep='-'), '%Y-%m-%d'), #format date as a date variable
+         race_recode= factor(race_recode, levels=c(1,2,3,4,5), c('White','Black','Hispanic','American Indian', 'Asian/Pacific Islanders')) , #converts race to a factor
+         sex= as.factor(sex), #define sex as a factor
+         agey = if_else(agey>120,NA_real_, agey) #set age to missing if>120
+         )
+```
+
+```{r}
+table1(~agey + race_recode + sex, data=d2)
+```
+
+### Make some plots
+
+ggplot can make pretty plots. The coding is modular. You add on a plot format or component with +
+
+Here is a basic plot
+
+```{r}
+ggplot(d2, aes(x=agey)) + 
+  geom_histogram(binwidth=1)
+
+```
+
+Make it look a little nicer
+
+```{r}
+ggplot(d2, aes(x=agey)) + 
+  geom_histogram(binwidth=1) +
+  theme_classic()+ #makes it look pretty
+    xlab('Age (years)')+ #x axis label
+   ggtitle('Age Distribution of Deaths')
+
+```
+
+## Let's create some time series
+
+First let's try all-cause deaths, by age group.
+
+1.  Create a variable denoting age category (agec)
+2.  Group the dataframe by agec and monthdate (group_by(agec, monthdate))
+3.  Count the number of rows in each group
+4.  Make sure all combinations of agec and monthdate are represented (filled time series)
+5.  Ungroup the dataset
+
+```{r}
+d3 <- d2 %>%
+  mutate(agec = if_else( agey>=0 & agey<5,1,
+                if_else(agey>=5 & agey<18,2,
+                if_else(agey>=18 & agey<65,3,
+                if_else(agey>=65 & agey<80,4,
+                if_else(agey>=80 & agey<120,5,999
+                            ))))),
+         agec=as.factor(agec)
+         ) %>%
+  group_by(agec, monthdate) %>%
+  summarize(N_deaths = n()) %>% # Step 3
+  tidyr::complete(agec, monthdate, fill=list(N_deaths=0)) %>% # Step 4
+  ungroup() %>%#Step 5
+  filter(!is.na(agec)) %>% #if agec is missing, remove
+   unique() #remove duplicate rows
+
+```
+
+Check your work--we should have same number of rows per group
+
+```{r}
+d3 %>% 
+  group_by(agec) %>% 
+  summarize(N_dates=n())
+```
+
+### Make some plots
+
+This looks terrible...this is because we haven't told R how to group the data
+
+```{r}
+ggplot(d3, aes(x=monthdate, y=N_deaths)) +
+  geom_line()
+
+
+```
+
+That didn't work because we didn't tell ggplot that we have multiple observations per time point (by agec)
+
+```{r}
+ggplot(d3, aes(x=monthdate, y=N_deaths, group=agec, color=agec)) +
+  geom_line()
+```
+
+Use a theme to make it look nicer
+
+```{r}
+ggplot(d3, aes(x=monthdate, y=N_deaths, group=agec, color=agec)) +
+  geom_line() +
+  theme_classic()
+```
+
+Facet wrap to separate out by column. 'free_y' allows each panel to have its own y axis
+
+```{r}
+ggplot(d3, aes(x=monthdate, y=N_deaths, group=agec, color=agec)) +
+  geom_line() +
+  theme_classic() +
+  facet_wrap(~agec, scales='free_y')
+```
+
+To force the Y axis to 0, set ylim(0,NA), this means bottom must be 0, top goes to whatever max of the data is for that group.
+
+```{r}
+ggplot(d3, aes(x=monthdate, y=N_deaths, group=agec, color=agec)) +
+  geom_line() +
+  theme_classic() +
+  facet_wrap(~agec, scales='free_y')+
+  ylim(0, NA)
+```
+
+
+## Working with vectors and matrices
+
+In R you can work with individual numbers (ie calculate value of 1+1) with vectors of numbers (ie a variable), or with matrices. Data can also be stored in 'data frames' which is like a matrix but that can store a mix of numeric variables and character variables.
+
+first let's reshape our dataset to a wide format
+
+'melt the data'
+
+```{r}
+d3.m <- reshape2::melt(d3, id.vars=c('monthdate', 'agec'))
+```
+
+then 'cast' it, rows will be date, columns wil be agec
+
+```{r}
+d3.c <- reshape2::dcast(d3.m,monthdate~agec )
+```
+
+We can extract a column by position. We use matrix notation [row,column]. If you leave it empty, you take all
+
+Here we will take the 5th column from d3.c, and all rows
+```{r}
+
+ag4 <- d3.c[,5]
+
+ag4
+```
+
+Instead, just take the first 10 time points
+```{r}
+ag4.first.ten <- d3.c[1:10,5]
+ag4.first.ten
+```
+You can add vectors together. Here we will add together the 4th and 5th columns, and combined together with column 4 and 5
+```{r}
+
+ag4_5 <- d3.c[,4] + d3.c[,5]
+
+combined <- cbind.data.frame('ag4'=d3.c[,4], 'ag5'=d3.c[,5],ag4_5 )
+```
+
+or could do this with tidy coding:
+```{r}
+
+new_ds3 <- d3.c %>%
+  rename(ag4 = `4`, 
+         ag5 = `5`) %>%
+  mutate(ag4_5= ag4 + ag5)
+
+new_ds3
+```
+
+
+## Writing Functions
+
+Anytime you find yourself coding the same thing over and over, you should consider writing a function to make it easier. 
+
+As a silly example, let's provide the function with 2 numbers and add them together. 
+
+We will create a function call 'my.fun1'. This function has 2 inputs 'a' and 'b'. We will supply numeric values for a and b, which are added together and stored as 'z'. Then it will return z
+
+```{r }
+my.fun1 <- function(a,b){
+  z <- a + b
+  return(z)
+}
+```
+
+Now run the function. Change the input values of a and b and see what happens
+```{r }
+res1 <- my.fun1(a=1, b=1)
+print(res1)
+```
+
+Now try to add two vectors together (same function, but input vectors instead of single numbers (scalars))
+
+```{r}
+#Call the function
+res1 <- my.fun1(a=new_ds3$ag4, b=new_ds3$ag5)
+print(res1)
+```
+
+Can also do this in a tidy workflow
+
+```{r }
+my.fun2 <- function(ds, xvar, yvar){
+  z <- ds[,xvar] + ds[,yvar]
+  return(z)
+}
+```
+
+```{r}
+new_ds3 %>%
+  my.fun2(xvar='ag4', yvar='ag5')
+```
+
+Or could make your plots in a function. we just take the code from above, but add a 'filter' by age function before we call ggplot (in a pipe)
+```{r}
+
+plot.fun1 <- function(age.select){
+  d3 %>%
+    filter(agec==age.select) %>%
+  ggplot( aes(x=monthdate, y=N_deaths)) +
+  geom_line() +
+  theme_classic() +
+  ylim(0, NA) +
+    ggtitle(age.select)
+}
+```
+
+Call the function to plot age group 1
+```{r}
+plot.fun1(age.select='1')
+```
+Or age group 5
+```{r}
+plot.fun1(age.select='5')
+```
+
+
+```
+
+
